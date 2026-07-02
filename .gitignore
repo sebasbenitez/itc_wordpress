@@ -34,3 +34,4 @@ error_log
 # Sistema operativo
 .DS_Store
 Thumbs.db
+wp-content/uploads/elementor/css/

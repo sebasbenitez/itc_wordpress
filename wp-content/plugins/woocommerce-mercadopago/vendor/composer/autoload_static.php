@@ -7,7 +7,7 @@ namespace Composer\Autoload;
 class ComposerStaticInit18ea251a1d3302239f52e95d9f180dd5
 {
     public static $prefixLengthsPsr4 = array (
-        'M' => 
+        'M' =>
         array (
             'MercadoPago\\Woocommerce\\' => 24,
             'MercadoPago\\PP\\Sdk\\' => 19,
@@ -15,11 +15,11 @@ class ComposerStaticInit18ea251a1d3302239f52e95d9f180dd5
     );
 
     public static $prefixDirsPsr4 = array (
-        'MercadoPago\\Woocommerce\\' => 
+        'MercadoPago\\Woocommerce\\' =>
         array (
             0 => __DIR__ . '/../..' . '/src',
         ),
-        'MercadoPago\\PP\\Sdk\\' => 
+        'MercadoPago\\PP\\Sdk\\' =>
         array (
             0 => __DIR__ . '/..' . '/mp-plugins/php-sdk/src',
         ),
