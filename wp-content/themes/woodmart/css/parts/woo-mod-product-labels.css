@@ -1,0 +1,1 @@
+.product-labels{display:flex;align-items:flex-start;flex-direction:column;flex-wrap:wrap;gap:10px;transition:all .3s ease}:where(.wd-loop-builder-off) .product-labels{position:absolute;top:7px;inset-inline-start:7px;z-index:1;transform:translateZ(0)}.product-label.wd-shape-round-sm{border-radius:12px}@media(max-width: 576px){.product-labels{gap:5px}}

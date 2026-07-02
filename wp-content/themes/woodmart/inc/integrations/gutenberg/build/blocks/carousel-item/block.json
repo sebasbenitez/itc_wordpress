@@ -1,0 +1,10 @@
+{
+  "apiVersion": 3,
+  "title": "Carousel item",
+  "name": "wd/carousel-item",
+  "category": "xtemos",
+  "textdomain": "woodmart",
+  "parent": [
+    "wd/carousel"
+  ]
+}

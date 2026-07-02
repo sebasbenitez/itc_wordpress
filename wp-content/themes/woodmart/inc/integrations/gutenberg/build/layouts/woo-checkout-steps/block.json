@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Checkout steps",
+  "name": "wd/woo-checkout-steps",
+  "category": "xtemos_site_elements",
+  "textdomain": "woodmart"
+}

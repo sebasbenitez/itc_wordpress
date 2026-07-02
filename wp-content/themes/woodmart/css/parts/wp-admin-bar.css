@@ -1,0 +1,1 @@
+@media(min-width: 1025px){.admin-bar{--wd-admin-bar-h: 32px}}@media(max-width: 1024px){html:has(.wd-side-hidden.wd-opened,.mfp-wrap) #wpadminbar{z-index:400}#wpadminbar{position:absolute}}

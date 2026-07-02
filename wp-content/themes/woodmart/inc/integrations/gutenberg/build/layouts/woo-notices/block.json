@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "WooCommerce notices",
+  "name": "wd/woo-notices",
+  "category": "xtemos_site_elements",
+  "textdomain": "woodmart"
+}

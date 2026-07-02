@@ -1,0 +1,58 @@
+.wc-cuotas-wrapper {
+    margin: 16px 0;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    overflow: hidden;
+    font-size: 14px;
+}
+
+.wc-cuota-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    flex-wrap: wrap;
+    transition: background 0.15s;
+}
+
+.wc-cuota-row:last-child {
+    border-bottom: none;
+}
+
+.wc-cuota-row:hover {
+    background: #fafafa;
+}
+
+.wc-cuota-label {
+    flex: 1;
+    min-width: 160px;
+    color: #333;
+}
+
+.wc-cuota-precio {
+    font-weight: 700;
+    color: #e53935;
+    white-space: nowrap;
+    font-size: 15px;
+}
+
+.wc-cuota-precio .woocommerce-Price-currencySymbol {
+    font-size: 0.85em;
+}
+
+.wc-cuota-tarjetas {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.wc-card {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}

@@ -1,0 +1,10 @@
+{
+  "apiVersion": 3,
+  "title": "Gallery item",
+  "name": "wd/gallery-item",
+  "category": "xtemos",
+  "textdomain": "woodmart",
+  "parent": [
+    "wd/gallery"
+  ]
+}

@@ -1,0 +1,134 @@
+<?php
+/**
+ * Loop Product Title block CSS.
+ *
+ * @package woodmart
+ */
+
+use XTS\Gutenberg\Block_CSS;
+
+$block_css = new Block_CSS( $attrs );
+
+$block_css->add_css_rules(
+	$block_selector,
+	array(
+		array(
+			'attr_name' => 'textAlign',
+			'template'  => '--wd-align: var(--wd-{{value}});',
+		),
+	)
+);
+
+$block_css->add_css_rules(
+	$block_selector . ' a',
+	array(
+		array(
+			'attr_name' => 'colorCode',
+			'template'  => 'color: {{value}};',
+		),
+		array(
+			'attr_name' => 'colorVariable',
+			'template'  => 'color: var({{value}});',
+		),
+	)
+);
+
+$block_css->add_css_rules(
+	$block_selector_hover . ' a',
+	array(
+		array(
+			'attr_name' => 'colorHoverCode',
+			'template'  => 'color: {{value}};',
+		),
+		array(
+			'attr_name' => 'colorHoverVariable',
+			'template'  => 'color: var({{value}});',
+		),
+	)
+);
+
+$block_css->add_css_rules(
+	$block_selector_parent_hover . ' a',
+	array(
+		array(
+			'attr_name' => 'colorParentHoverCode',
+			'template'  => 'color: {{value}};',
+		),
+		array(
+			'attr_name' => 'colorParentHoverVariable',
+			'template'  => 'color: var({{value}});',
+		),
+	)
+);
+
+$block_css->add_css_rules(
+	$block_selector,
+	array(
+		array(
+			'attr_name' => 'textAlignTablet',
+			'template'  => '--wd-align: var(--wd-{{value}});',
+		),
+	),
+	'tablet'
+);
+
+$block_css->add_css_rules(
+	$block_selector,
+	array(
+		array(
+			'attr_name' => 'textAlignMobile',
+			'template'  => '--wd-align: var(--wd-{{value}});',
+		),
+	),
+	'mobile'
+);
+
+
+if ( ! empty( $attrs['linesLimit'] ) ) {
+	$block_css->add_css_rules(
+		$block_selector,
+		array(
+			array(
+				'attr_name' => 'linesClamp',
+				'template'  => '--wd-line-count: {{value}};',
+			),
+		)
+	);
+
+	$block_css->add_css_rules(
+		$block_selector,
+		array(
+			array(
+				'attr_name' => 'linesClampTablet',
+				'template'  => '--wd-line-count: {{value}};',
+			),
+		),
+		'tablet'
+	);
+
+	$block_css->add_css_rules(
+		$block_selector,
+		array(
+			array(
+				'attr_name' => 'linesClampMobile',
+				'template'  => '--wd-line-count: {{value}};',
+			),
+		),
+		'mobile'
+	);
+}
+
+$block_css->merge_with( wd_get_block_typography_css( $block_selector, $attrs, 'tp' ) );
+
+$block_css->merge_with(
+	wd_get_block_advanced_css(
+		array(
+			'selector'              => $block_selector,
+			'selector_hover'        => $block_selector_hover,
+			'selector_parent_hover' => $block_selector_parent_hover,
+		),
+		$attrs
+	)
+);
+
+return $block_css->get_css_for_devices();

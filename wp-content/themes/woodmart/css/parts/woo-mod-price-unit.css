@@ -1,0 +1,1 @@
+.wd-price-unit{display:inline-block;margin-inline-start:4px;color:var(--color-gray-300);font-weight:400}.wd-price-unit:not(:last-child){margin-inline-end:2px}.wd-price-unit:before{content:"/";margin-inline-end:4px}

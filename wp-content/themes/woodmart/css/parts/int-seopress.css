@@ -1,0 +1,1 @@
+.breadcrumb a span{color:inherit !important}.breadcrumb li:after{color:var(--wd-bcrumb-delim-color)}.breadcrumb .active{--wd-link-color: var(--wd-bcrumb-color-active);--wd-link-color-hover: color-mix(in srgb, var(--wd-bcrumb-color-active), transparent 25%);color:var(--wd-bcrumb-color-active)}

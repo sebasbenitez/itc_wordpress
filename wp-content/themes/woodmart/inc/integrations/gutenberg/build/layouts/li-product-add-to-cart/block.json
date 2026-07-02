@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Product add to cart",
+  "name": "wd/li-product-add-to-cart",
+  "category": "xtemos_loop_builder",
+  "textdomain": "woodmart"
+}

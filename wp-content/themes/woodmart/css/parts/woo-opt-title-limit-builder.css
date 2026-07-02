@@ -1,0 +1,1 @@
+.wd-line-clamp.wd-entities-title{overflow:hidden;max-height:calc(var(--wd-line-count, 1)*var(--wd-line-height, 1.4em));line-height:var(--wd-line-height, 1.4em)}

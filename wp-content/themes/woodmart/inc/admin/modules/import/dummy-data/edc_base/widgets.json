@@ -1,0 +1,74 @@
+{
+    "sidebar-1": {
+        "widgets": {
+            "categories-2": {
+                "title": "Categories",
+                "count": 0,
+                "hierarchical": 0,
+                "dropdown": 0
+            },
+            "woodmart-recent-posts-2": {
+                "title": "Recent Posts",
+                "limit": 3,
+                "offset": 0,
+                "order": "DESC",
+                "orderby": "date",
+                "category": "all",
+                "date": true,
+                "comment_count": true,
+                "thumb": true,
+                "thumb_height": 60,
+                "thumb_width": 84
+            }
+        }
+    },
+    "sidebar-shop": {
+        "widgets": {
+            "woocommerce_product_categories-2": {
+                "title": "Product categories",
+                "orderby": "order",
+                "dropdown": 0,
+                "count": 0,
+                "hierarchical": 0,
+                "show_children_only": 0,
+                "hide_empty": 1,
+                "max_depth": ""
+            },
+            "woocommerce_price_filter-3": {
+                "title": "Price"
+            },
+            "woodmart-woocommerce-layered-nav-2": {
+                "title": "Brand",
+                "attribute": "product_brand",
+                "category": [
+                    "all"
+                ],
+                "query_type": "and",
+                "display": "list",
+                "size": "small",
+                "style": "inherit",
+                "shape": "inherit",
+                "labels": "on",
+                "tooltips": "off",
+                "checkboxes": "off",
+                "search_by_filters": "1"
+            },
+            "woodmart-woocommerce-layered-nav-3": {
+                "title": "Color",
+                "attribute": "color",
+                "category": [
+                    "all"
+                ],
+                "query_type": "and",
+                "display": "list",
+                "size": "normal",
+                "style": "inherit",
+                "shape": "round",
+                "labels": "on",
+                "tooltips": "off",
+                "checkboxes": "off",
+                "search_by_filters": ""
+            }
+        }
+    }
+}

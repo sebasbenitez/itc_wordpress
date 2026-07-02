@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Archive title",
+  "name": "wd/sa-archive-title",
+  "category": "xtemos_archive_elements",
+  "textdomain": "woodmart"
+}

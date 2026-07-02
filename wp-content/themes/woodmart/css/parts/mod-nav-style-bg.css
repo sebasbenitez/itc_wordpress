@@ -1,0 +1,1 @@
+.wd-nav:where(.wd-style-bg){--nav-pd: 5px 12px;--nav-color-hover: var(--wd-primary-color);--nav-bg-hover: color-mix(in srgb, var(--wd-primary-color), transparent 75%);--nav-radius: 40px;gap:var(--nav-gap-v) calc(var(--nav-gap) - 15px)}

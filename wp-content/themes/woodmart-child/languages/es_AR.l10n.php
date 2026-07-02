@@ -1,0 +1,2 @@
+<?php
+return ['po-revision-date'=>'2025-02-03 16:16+0000','mime-version'=>'1.0','content-type'=>'text/plain; charset=UTF-8','content-transfer-encoding'=>'8bit','plural-forms'=>'nplurals=2; plural=n != 1;','x-generator'=>'Loco https://localise.biz/','language'=>'es_AR','project-id-version'=>'Woodmart','language-team'=>'Español de Argentina','messages'=>['Woodmart Child Theme'=>'Configurar Woodmart Tema Niño','XTemos'=>'XTemos']];

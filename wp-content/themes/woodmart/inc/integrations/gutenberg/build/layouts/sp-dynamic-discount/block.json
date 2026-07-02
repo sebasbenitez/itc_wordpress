@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Product dynamic discount table",
+  "name": "wd/sp-dynamic-discount",
+  "category": "xtemos_single_product",
+  "textdomain": "woodmart"
+}

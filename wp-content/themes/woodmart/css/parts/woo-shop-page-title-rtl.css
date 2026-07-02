@@ -1,0 +1,1 @@
+.wd-title-wrapp{display:flex;align-items:center}.wd-back-btn.wd-style-icon{--wd-action-icon-size: 24px;--wd-action-h: 40px;--wd-btn-icon: "\f120"}:is(.title-design-centered,.without-title.with-back-btn) .wd-back-btn{margin-inline-start:-50px}@media(max-width: 1024px){.wd-back-btn{display:none}}

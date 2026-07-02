@@ -1,0 +1,12 @@
+{
+  "apiVersion": 3,
+  "title": "Banner",
+  "name": "wd/cover",
+  "description": "Attention-grabbing block with content and background settings.",
+  "category": "xtemos",
+  "textdomain": "woodmart",
+  "keywords": [
+    "banner",
+    "cover"
+  ]
+}

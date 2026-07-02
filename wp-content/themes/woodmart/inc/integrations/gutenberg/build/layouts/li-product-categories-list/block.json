@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Product categories",
+  "name": "wd/li-product-categories-list",
+  "category": "xtemos_loop_builder",
+  "textdomain": "woodmart"
+}

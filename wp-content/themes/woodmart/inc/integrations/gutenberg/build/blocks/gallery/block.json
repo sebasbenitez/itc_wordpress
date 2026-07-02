@@ -1,0 +1,15 @@
+{
+  "apiVersion": 3,
+  "title": "Gallery",
+  "name": "wd/gallery",
+  "description": "Grid or carousel gallery for displaying images.",
+  "category": "xtemos",
+  "textdomain": "woodmart",
+  "allowedBlocks": [
+    "wd/gallery-item"
+  ],
+  "keywords": [
+    "images",
+    "photos"
+  ]
+}

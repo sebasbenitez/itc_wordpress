@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Product additional information",
+  "name": "wd/sp-additional-info-table",
+  "category": "xtemos_single_product",
+  "textdomain": "woodmart"
+}

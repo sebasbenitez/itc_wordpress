@@ -1,0 +1,36 @@
+# Credenciales y config sensible
+wp-config.php
+.htaccess
+.htaccess.bk
+.user.ini
+
+# Cache
+wp-content/cache/
+wp-content/litespeed/
+wp-content/advanced-cache-backup.php
+wp-content/object-cache-backup.php
+
+# Seguridad / firewall (se regeneran solos)
+wp-content/jetpack-waf/
+wp-content/wflogs/
+
+# Temporales y actualizaciones
+wp-content/temp/
+wp-content/upgrade/
+wp-content/upgrade-temp-backup/
+
+# Backups de UpdraftPlus (redundante con el backup manual)
+wp-content/updraft/
+wp-content/updraftplus-manifest.json
+
+# Exports
+wp-content/webtoffee_export/
+
+# Backups sueltos y logs
+*.sql
+*.log
+error_log
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

@@ -1,0 +1,26 @@
+{
+    "sidebar-shop": {
+        "widgets": {
+            "wd-product-category-filter-2": {
+                "title": "Category",
+                "orderby": "name",
+                "query_type": "or",
+                "display": "list",
+                "checkboxes": "off",
+                "structure": "hierarchical",
+                "show_search_input": "",
+                "count": "",
+                "max_depth": ""
+            },
+            "woocommerce_price_filter-2": {
+                "title": "Filter by price"
+            },
+            "wd-widget-stock-status-2": {
+                "title": "Stock status",
+                "instock": "1",
+                "onsale": "1",
+                "onbackorder": ""
+            }
+        }
+    }
+}

@@ -1,0 +1,125 @@
+/**
+ * WoodMart Images Optimizer Styles
+ * Enhanced UI styles for the image optimization interface
+ */
+
+.xts-imgopt-optimize-btn.processing,
+.xts-imgopt-restore-btn.processing {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.xts-imgopt-optimize-btn.processing::before,
+.xts-imgopt-restore-btn.processing::before {
+    content: '';
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(122, 122, 122, 0.3);
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: woodmart_rotate 1s linear infinite;
+}
+
+.column-xts_optimizer {
+    width: 240px;
+}
+
+.xts-imgopt-info {
+    margin-bottom: 10px;
+}
+
+.wp-list-table .xts-imgopt-info {
+    padding: 10px 14px;
+}
+
+.xts-imgopt-info .xts-status-label:before {
+    font-family: "xts-icon-font";
+    margin-inline-end: 5px;
+}
+
+.xts-imgopt-info.xts-success .xts-status-label:before {
+    content: "\e900";
+}
+
+.xts-imgopt-info.xts-error .xts-status-label:before {
+    content: "\e927";
+}
+
+.xts-imgopt-info.xts-info .xts-status-label:before {
+    content: "\e903";
+}
+
+.xts-imgopt-info .xts-timestamp {
+    font-size: 12px;
+    font-style: italic;
+}
+
+.xts-imgopt-no-token > strong {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.xts-imgopt-no-token a {
+    color: var(--xts-primary-color);
+}
+
+.xts-imgopt-no-token a:hover {
+    color: var(--xts-primary-color-darker-20);
+}
+
+.xts-imgopt-no-token .xts-notice p {
+    margin-block: 1em;
+}
+
+.xts-imgopt-error,
+.xts-imgopt-unsupported {
+    font-style: italic;
+}
+
+.wp-list-table .xts-imgopt-unsupported {
+    color: #999;
+}
+
+.wp-list-table .xts-imgopt-error {
+    color: #dc3232;
+}
+
+.compat-field-woodmart_optimizer th {
+    max-width: 30px;
+}
+
+#bulk-progress-bar {
+    background: #e0e0e0;
+    height: 20px;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 10px 0;
+    position: relative;
+}
+
+#bulk-progress-bar div {
+    background: var(--xts-bg-color-active);
+    height: 100%;
+    min-width: 10%;
+    transition: width 0.3s ease;
+    position: relative;
+}
+
+#bulk-progress-bar div::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.2),
+        transparent
+    );
+    animation: xts-bulk-progress-shine 2s ease-in-out infinite;
+}
+
+@keyframes xts-bulk-progress-shine {
+    0% { transform: translateX(-100%); }
+    50% { transform: translateX(100%); }
+    100% { transform: translateX(100%); }
+}

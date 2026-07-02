@@ -1,0 +1,1 @@
+.whb-scroll-slide.whb-sticked .whb-main-header{animation:wd-fadeInDownBig .4s ease}.whb-scroll-slide:is(.whb-scroll-down,.whb-scroll-up) .whb-main-header{transition:transform .3s ease}.whb-scroll-slide.whb-hide-on-scroll.whb-sticked .whb-main-header{transform:translateY(-100%);animation:none}.whb-scroll-slide.whb-hide-on-scroll.whb-scroll-up .whb-main-header{transform:none}

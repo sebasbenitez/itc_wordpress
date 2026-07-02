@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Add to wishlist button",
+  "name": "wd/sp-wishlist-btn",
+  "category": "xtemos_single_product",
+  "textdomain": "woodmart"
+}

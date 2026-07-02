@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Product stock progress bar",
+  "name": "wd/li-product-stock-progress-bar",
+  "category": "xtemos_loop_builder",
+  "textdomain": "woodmart"
+}

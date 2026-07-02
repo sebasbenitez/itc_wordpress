@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Product visitor counter",
+  "name": "wd/sp-visitor-counter",
+  "category": "xtemos_single_product",
+  "textdomain": "woodmart"
+}

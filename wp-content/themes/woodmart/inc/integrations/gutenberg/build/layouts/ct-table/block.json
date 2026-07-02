@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Cart table",
+  "name": "wd/ct-table",
+  "category": "xtemos_cart_elements",
+  "textdomain": "woodmart"
+}

@@ -1,0 +1,645 @@
+<?php
+/**
+ * Floating block metaboxes.
+ *
+ * @package woodmart
+ */
+
+namespace XTS\Modules\Floating_Blocks\Integrations\Gutenberg;
+
+use XTS\Gutenberg\Block_Attributes;
+use XTS\Gutenberg\Block_CSS;
+use XTS\Singleton;
+
+
+/**
+ * Floating block metaboxes.
+ */
+class Popup extends Singleton {
+
+	/**
+	 * Meta from REST API.
+	 *
+	 * @var array
+	 */
+	private $rest_meta_data = array();
+	/**
+	 * Init.
+	 */
+	public function init() {
+		add_action( 'init', array( $this, 'register_meta_fields' ), 100 );
+
+		add_action( 'rest_pre_insert_wd_popup', array( $this, 'handle_rest_post_save' ), 10, 3 );
+		add_filter( 'woodmart_post_blocks_css', array( $this, 'render_css' ), 10, 3 );
+	}
+
+	/**
+	 * Register post meta for Gutenberg.
+	 *
+	 * @return void
+	 */
+	public function register_meta_fields() {
+		$attr = $this->get_block_attributes();
+
+		foreach ( $attr as $key => $value ) {
+			$settings = array(
+				'single'        => true,
+				'type'          => $value['type'],
+				'auth_callback' => '__return_true',
+				'show_in_rest'  => in_array( $value['type'], array( 'array', 'object' ), true ) ? $this->prepare_rest_schema_for_attribute( $value['type'] ) : true,
+			);
+
+			if ( isset( $value['default'] ) ) {
+				$settings['default'] = $value['default'];
+			}
+
+			register_post_meta(
+				'wd_popup',
+				$key,
+				$settings
+			);
+		}
+	}
+
+	/**
+	 * Get block attributes.
+	 *
+	 * @return array|array[]
+	 */
+	public function get_block_attributes() {
+		if ( ! class_exists( 'XTS\Gutenberg\Block_Attributes' ) ) {
+			return array();
+		}
+
+		$attr = new Block_Attributes();
+
+		wd_get_margin_control_attrs( $attr, 'wd_margin' );
+		wd_get_padding_control_attrs( $attr, 'wd_padding' );
+		wd_get_box_shadow_control_attrs( $attr, 'wd_box_shadow' );
+		wd_get_border_control_attrs( $attr, 'wd_border' );
+		wd_get_background_control_attrs( $attr, 'wd_background' );
+		wd_get_backdrop_filter_control_attrs( $attr, 'wd_backdrop_filter' );
+		wd_get_backdrop_filter_control_attrs( $attr, 'wd_overlay_backdrop_filter' );
+
+		wd_get_border_control_attrs( $attr, 'wd_close_btn_border' );
+		wd_get_border_control_attrs( $attr, 'wd_close_btn_border_hover' );
+		wd_get_box_shadow_control_attrs( $attr, 'wd_close_btn_box_shadow' );
+		wd_get_box_shadow_control_attrs( $attr, 'wd_close_btn_box_shadow_hover' );
+		wd_get_padding_control_attrs( $attr, 'wd_close_btn_padding' );
+
+		$attr->add_attr(
+			array(
+				'wd_width'                           => array(
+					'type'       => 'string',
+					'responsive' => true,
+					'units'      => 'px',
+				),
+				'wd_height'                          => array(
+					'type'       => 'string',
+					'responsive' => true,
+					'units'      => 'px',
+				),
+				'wd_content_vertical_align'          => array(
+					'type'       => 'string',
+					'responsive' => true,
+				),
+				'wd_horizontal_align'                => array(
+					'type'       => 'string',
+					'responsive' => true,
+				),
+				'wd_vertical_align'                  => array(
+					'type'       => 'string',
+					'responsive' => true,
+				),
+				'wd_z_index'                         => array(
+					'type' => 'string',
+				),
+				'wd_close_btn'                       => array(
+					'type'    => 'boolean',
+					'default' => true,
+				),
+				'wd_close_btn_display'               => array(
+					'type'    => 'string',
+					'default' => 'icon',
+				),
+				'wd_close_by_overlay'                => array(
+					'type'    => 'boolean',
+					'default' => true,
+				),
+				'wd_close_by_esc'                    => array(
+					'type'    => 'boolean',
+					'default' => true,
+				),
+				'wd_close_by_selector'               => array(
+					'type' => 'string',
+				),
+				'wd_persistent_close'                => array(
+					'type'    => 'boolean',
+					'default' => true,
+				),
+				'wd_hide_popup'                      => array(
+					'type'       => 'boolean',
+					'responsive' => true,
+				),
+				'wd_enable_page_scrolling'           => array(
+					'type' => 'boolean',
+				),
+				'wd_animation'                       => array(
+					'type' => 'string',
+				),
+				'wd_btn_offset_v'                    => array(
+					'type'       => 'string',
+					'responsive' => true,
+				),
+				'wd_btn_offset_h'                    => array(
+					'type'       => 'string',
+					'responsive' => true,
+				),
+				'wd_display_type'                    => array(
+					'type'    => 'string',
+					'default' => 'always',
+				),
+				'wd_is_some_time_enabled'            => array(
+					'type'    => 'boolean',
+					'default' => true,
+				),
+				'wd_time_to_show'                    => array(
+					'type'    => 'string',
+					'default' => '0',
+				),
+				'wd_time_to_show_once'               => array(
+					'type' => 'boolean',
+				),
+				'wd_is_after_scroll_enabled'         => array(
+					'type' => 'boolean',
+				),
+				'wd_scroll_value'                    => array(
+					'type'    => 'string',
+					'default' => '50',
+					'units'   => '%',
+				),
+				'wd_after_scroll_once'               => array(
+					'type' => 'boolean',
+				),
+				'wd_is_scroll_to_selector_enabled'   => array(
+					'type' => 'boolean',
+				),
+				'wd_scroll_to_selector'              => array(
+					'type' => 'string',
+				),
+				'wd_scroll_to_selector_once'         => array(
+					'type' => 'boolean',
+				),
+				'wd_is_inactivity_time_enabled'      => array(
+					'type' => 'boolean',
+				),
+				'wd_inactivity_time'                 => array(
+					'type'    => 'string',
+					'default' => '10000',
+				),
+				'wd_inactivity_time_once'            => array(
+					'type' => 'boolean',
+				),
+				'wd_is_exit_intent_enabled'          => array(
+					'type' => 'boolean',
+				),
+				'wd_exit_intent_once'                => array(
+					'type' => 'boolean',
+				),
+				'wd_is_on_click_enabled'             => array(
+					'type' => 'boolean',
+				),
+				'wd_click_times'                     => array(
+					'type'    => 'string',
+					'default' => '3',
+				),
+				'wd_click_times_once'                => array(
+					'type' => 'boolean',
+				),
+				'wd_is_on_selector_click_enabled'    => array(
+					'type' => 'boolean',
+				),
+				'wd_selector'                        => array(
+					'type' => 'string',
+				),
+				'wd_selector_click_once'             => array(
+					'type' => 'boolean',
+				),
+				'wd_is_url_parameter_enabled'        => array(
+					'type' => 'boolean',
+				),
+				'wd_parameters'                      => array(
+					'type' => 'string',
+				),
+				'wd_url_parameter_once'              => array(
+					'type' => 'boolean',
+				),
+				'wd_is_url_hashtag_enabled'          => array(
+					'type' => 'boolean',
+				),
+				'wd_hashtags'                        => array(
+					'type' => 'string',
+				),
+				'wd_url_hashtag_once'                => array(
+					'type' => 'boolean',
+				),
+				'wd_is_after_page_views_enabled'     => array(
+					'type' => 'boolean',
+				),
+				'wd_after_page_views'                => array(
+					'type'    => 'string',
+					'default' => '1',
+				),
+				'wd_after_page_views_once'           => array(
+					'type' => 'boolean',
+				),
+				'wd_is_after_sessions_enabled'       => array(
+					'type' => 'boolean',
+				),
+				'wd_after_sessions'                  => array(
+					'type'    => 'string',
+					'default' => '1',
+				),
+				'wd_after_sessions_once'             => array(
+					'type' => 'boolean',
+				),
+				'wd_conditions'                      => array(
+					'type'    => 'object',
+					'default' => array(
+						array(
+							'comparison' => 'include',
+							'type'       => 'all',
+						),
+					),
+				),
+				'wd_close_btn_icon_size'             => array(
+					'type'       => 'string',
+					'responsive' => true,
+				),
+				'wd_close_btn_borderWidthLock'       => array(
+					'type'    => 'boolean',
+					'default' => true,
+				),
+				'wd_close_btn_border_hoverWidthLock' => array(
+					'type'    => 'boolean',
+					'default' => true,
+				),
+			)
+		);
+
+		$attr->add_attr( wd_get_color_control_attrs( 'wd_overlay_color' ) );
+
+		$attr->add_attr( wd_get_typography_control_attrs(), 'wd_close_btn_typography' );
+
+		$attr->add_attr( wd_get_color_control_attrs( 'wd_close_btn_text_color' ) );
+		$attr->add_attr( wd_get_color_control_attrs( 'wd_close_btn_text_color_hover' ) );
+
+		$attr->add_attr( wd_get_color_control_attrs( 'wd_close_btn_icon_color' ) );
+		$attr->add_attr( wd_get_color_control_attrs( 'wd_close_btn_icon_color_hover' ) );
+
+		$attr->add_attr( wd_get_color_control_attrs( 'wd_close_btn_bg_color' ) );
+		$attr->add_attr( wd_get_color_control_attrs( 'wd_close_btn_bg_color_hover' ) );
+
+		return $attr->get_attr();
+	}
+
+	/**
+	 * Prepare REST schema configuration for an attribute type.
+	 *
+	 * @param string $type Attribute type.
+	 * @return array
+	 */
+	public function prepare_rest_schema_for_attribute( $type ) {
+		return array(
+			'schema' => array(
+				'type'                 => $type,
+				'additionalProperties' => true,
+			),
+		);
+	}
+
+	/**
+	 * Handle post save from REST API and store meta data.
+	 *
+	 * @param \stdClass        $post Post object prepared for database.
+	 * @param \WP_REST_Request $request REST request object.
+	 */
+	public function handle_rest_post_save( $post, $request ) {
+		$this->rest_meta_data = $request->get_param( 'meta' );
+
+		return $post;
+	}
+
+	/**
+	 * Render CSS.
+	 *
+	 * @param array  $css Existing CSS.
+	 * @param int    $post_id Post ID.
+	 * @param object $post Post object.
+	 * @return array
+	 */
+	public function render_css( $css, $post_id, $post ) {
+		if ( ! $post_id || ! $post || 'wd_popup' !== $post->post_type ) {
+			return $css;
+		}
+
+		$attrs = array();
+
+		if ( ! empty( $this->rest_meta_data ) ) {
+			$attrs = $this->rest_meta_data;
+		} else {
+			$raw_attrs = $this->get_block_attributes();
+
+			foreach ( $raw_attrs as $attr => $value ) {
+				$attrs[ $attr ] = get_post_meta( $post_id, $attr, true );
+			}
+		}
+
+		if ( empty( $attrs ) || ! is_array( $attrs ) ) {
+			return $css;
+		}
+
+		$block_css      = new Block_CSS( $attrs );
+		$block_selector = '.wd-mfp-popup-wrap-' . $post_id;
+
+		$block_css->add_css_rules(
+			'.wd ' . $block_selector,
+			array(
+				array(
+					'attr_name' => 'wd_width',
+					'template'  => '--wd-popup-width: {{value}}' . $block_css->get_units_for_attribute( 'wd_width' ) . ';',
+				),
+				array(
+					'attr_name' => 'wd_height',
+					'template'  => '--wd-popup-height: {{value}}' . $block_css->get_units_for_attribute( 'wd_height' ) . ';',
+				),
+
+				array(
+					'attr_name' => 'wd_horizontal_align',
+					'template'  => '--wd-justify-content: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_vertical_align',
+					'template'  => '--wd-align-items: {{value}};',
+				),
+
+				array(
+					'attr_name' => 'wd_btn_offset_v',
+					'template'  => '--wd-close-btn-offset-v: {{value}}' . $block_css->get_units_for_attribute( 'wd_btn_offset_v' ) . ';',
+				),
+				array(
+					'attr_name' => 'wd_btn_offset_h',
+					'template'  => '--wd-close-btn-offset-h: {{value}}' . $block_css->get_units_for_attribute( 'wd_btn_offset_h' ) . ';',
+				),
+			)
+		);
+
+		$block_css->add_css_rules(
+			'.wd ' . $block_selector . '.wd-popup-builder-wrap .wd-popup',
+			array(
+				array(
+					'attr_name' => 'wd_content_vertical_align',
+					'template'  => '--wd-align-items: {{value}};',
+				),
+			)
+		);
+
+		$block_css->add_css_rules(
+			'body .wd-mfp-popup-bg-' . $post_id,
+			array(
+				array(
+					'attr_name' => 'wd_overlay_colorCode',
+					'template'  => 'background-color: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_overlay_colorVariable',
+					'template'  => 'background-color: var({{value}});',
+				),
+			)
+		);
+
+		$block_css->add_css_rules(
+			$block_selector . ' .wd-popup-close',
+			array(
+				array(
+					'attr_name' => 'wd_close_btn_text_colorCode',
+					'template'  => '--wd-action-text-color: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_text_colorVariable',
+					'template'  => '--wd-action-text-color: var({{value}});',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_icon_colorCode',
+					'template'  => '--wd-action-icon-color: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_icon_colorVariable',
+					'template'  => '--wd-action-icon-color: var({{value}});',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_text_color_hoverCode',
+					'template'  => '--wd-action-text-color-hover: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_text_color_hoverVariable',
+					'template'  => '--wd-action-text-color-hover: var({{value}});',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_icon_color_hoverCode',
+					'template'  => '--wd-action-icon-color-hover: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_icon_color_hoverVariable',
+					'template'  => '--wd-action-icon-color-hover: var({{value}});',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_icon_size',
+					'template'  => '--wd-action-icon-size: {{value}}px;',
+				),
+			)
+		);
+
+		$block_css->add_css_rules(
+			$block_selector . ' .wd-popup-close',
+			array(
+				array(
+					'attr_name' => 'wd_close_btn_icon_sizeTablet',
+					'template'  => '--wd-action-icon-size: {{value}}px;',
+				),
+			),
+			'tablet'
+		);
+
+		$block_css->add_css_rules(
+			$block_selector . ' .wd-popup-close',
+			array(
+				array(
+					'attr_name' => 'wd_close_btn_icon_sizeMobile',
+					'template'  => '--wd-action-icon-size: {{value}}px;',
+				),
+			),
+			'mobile'
+		);
+
+		$block_css->add_css_rules(
+			$block_selector . ' .wd-popup-close',
+			array(
+				array(
+					'attr_name' => 'wd_close_btn_bg_colorCode',
+					'template'  => 'background-color: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_bg_colorVariable',
+					'template'  => 'background-color: var({{value}});',
+				),
+			)
+		);
+
+		$block_css->add_css_rules(
+			$block_selector . ' .wd-popup-close:hover',
+			array(
+				array(
+					'attr_name' => 'wd_close_btn_bg_color_hoverCode',
+					'template'  => 'background-color: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_close_btn_bg_color_hoverVariable',
+					'template'  => 'background-color: var({{value}});',
+				),
+			)
+		);
+
+		$block_css->add_css_rules(
+			'.wd ' . $block_selector,
+			array(
+				array(
+					'attr_name' => 'wd_widthTablet',
+					'template'  => '--wd-popup-width: {{value}}' . $block_css->get_units_for_attribute( 'wd_width', 'tablet' ) . ';',
+				),
+				array(
+					'attr_name' => 'wd_heightTablet',
+					'template'  => '--wd-popup-height: {{value}}' . $block_css->get_units_for_attribute( 'wd_height', 'tablet' ) . ';',
+				),
+
+				array(
+					'attr_name' => 'wd_horizontal_alignTablet',
+					'template'  => '--wd-justify-content: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_vertical_alignTablet',
+					'template'  => '--wd-align-items: {{value}};',
+				),
+
+				array(
+					'attr_name' => 'wd_btn_offset_vTablet',
+					'template'  => '--wd-close-btn-offset-v: {{value}}' . $block_css->get_units_for_attribute( 'wd_btn_offset_v', 'tablet' ) . ';',
+				),
+				array(
+					'attr_name' => 'wd_btn_offset_hTablet',
+					'template'  => '--wd-close-btn-offset-h: {{value}}' . $block_css->get_units_for_attribute( 'wd_btn_offset_h', 'tablet' ) . ';',
+				),
+			),
+			'tablet'
+		);
+
+		$block_css->add_css_rules(
+			'.wd ' . $block_selector . '.wd-popup-builder-wrap .wd-popup',
+			array(
+				array(
+					'attr_name' => 'wd_content_vertical_alignTablet',
+					'template'  => '--wd-align-items: {{value}};',
+				),
+			),
+			'tablet'
+		);
+
+		$block_css->add_css_rules(
+			'.wd ' . $block_selector,
+			array(
+				array(
+					'attr_name' => 'wd_widthMobile',
+					'template'  => '--wd-popup-width: {{value}}' . $block_css->get_units_for_attribute( 'wd_width', 'mobile' ) . ';',
+				),
+				array(
+					'attr_name' => 'wd_heightMobile',
+					'template'  => '--wd-popup-height: {{value}}' . $block_css->get_units_for_attribute( 'wd_height', 'mobile' ) . ';',
+				),
+
+				array(
+					'attr_name' => 'wd_horizontal_alignMobile',
+					'template'  => '--wd-justify-content: {{value}};',
+				),
+				array(
+					'attr_name' => 'wd_vertical_alignMobile',
+					'template'  => '--wd-align-items: {{value}};',
+				),
+
+				array(
+					'attr_name' => 'wd_btn_offset_vMobile',
+					'template'  => '--wd-close-btn-offset-v: {{value}}' . $block_css->get_units_for_attribute( 'wd_btn_offset_v', 'mobile' ) . ';',
+				),
+				array(
+					'attr_name' => 'wd_btn_offset_hMobile',
+					'template'  => '--wd-close-btn-offset-h: {{value}}' . $block_css->get_units_for_attribute( 'wd_btn_offset_h', 'mobile' ) . ';',
+				),
+			),
+			'mobile'
+		);
+
+		$block_css->add_css_rules(
+			'.wd ' . $block_selector . '.wd-popup-builder-wrap .wd-popup',
+			array(
+				array(
+					'attr_name' => 'wd_content_vertical_alignMobile',
+					'template'  => '--wd-align-items: {{value}};',
+				),
+			),
+			'mobile'
+		);
+
+		$block_css->merge_with( wd_get_block_bg_css( '.wd ' . $block_selector . ' .wd-popup', $attrs, 'wd_background' ) );
+		$block_css->merge_with( wd_get_block_backdrop_filter_css( $block_selector . ' .wd-popup', $attrs, 'wd_backdrop_filter' ) );
+		$block_css->merge_with( wd_get_block_backdrop_filter_css( '.wd .wd-mfp-popup-bg-' . $post_id, $attrs, 'wd_overlay_backdrop_filter' ) );
+		$block_css->merge_with( wd_get_block_border_css( '.wd ' . $block_selector . ' .wd-popup', $attrs, 'wd_border' ) );
+		$block_css->merge_with( wd_get_block_box_shadow_css( '.wd ' . $block_selector . ' .wd-popup', $attrs, 'wd_box_shadow' ) );
+
+		$block_css->merge_with( wd_get_block_padding_css( '.wd ' . $block_selector . ' .wd-popup .wd-popup-inner', $attrs, 'wd_padding' ) );
+		$block_css->merge_with(
+			wd_get_block_margin_css(
+				'.wd ' . $block_selector,
+				$attrs,
+				'wd_margin',
+				array(
+					'top'    => '--wd-popup-mt',
+					'right'  => '--wd-popup-mr',
+					'bottom' => '--wd-popup-mb',
+					'left'   => '--wd-popup-ml',
+				)
+			)
+		);
+
+		if ( 'text' === $attrs['wd_close_btn_display'] ) {
+			$block_css->merge_with( wd_get_block_typography_css( '.wd ' . $block_selector . ' .wd-popup-close .wd-action-text', $attrs, 'wd_close_btn_typography' ) );
+		}
+
+		$block_css->merge_with( wd_get_block_border_css( $block_selector . ' .wd-popup-close', $attrs, 'wd_close_btn_border' ) );
+		$block_css->merge_with( wd_get_block_border_css( $block_selector . ' .wd-popup-close:hover', $attrs, 'wd_close_btn_border_hover' ) );
+		$block_css->merge_with( wd_get_block_box_shadow_css( $block_selector . ' .wd-popup-close', $attrs, 'wd_close_btn_box_shadow' ) );
+		$block_css->merge_with( wd_get_block_box_shadow_css( $block_selector . ' .wd-popup-close:hover', $attrs, 'wd_close_btn_box_shadow_hover' ) );
+
+		$block_css->merge_with( wd_get_block_padding_css( '.wd ' . $block_selector . ' .wd-popup-close a', $attrs, 'wd_close_btn_padding' ) );
+
+		$css_for_devices = $block_css->get_css_for_devices();
+
+		foreach ( $css_for_devices as $device => $css_device ) {
+			if ( $css_device ) {
+				$css[ $device ] .= ' ' . $css_device;
+			}
+		}
+
+		return $css;
+	}
+}
+
+Popup::get_instance();

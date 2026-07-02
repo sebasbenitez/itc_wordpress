@@ -1,0 +1,7 @@
+{
+  "apiVersion": 3,
+  "title": "Product labels",
+  "name": "wd/sp-product-labels",
+  "category": "xtemos_single_product",
+  "textdomain": "woodmart"
+}

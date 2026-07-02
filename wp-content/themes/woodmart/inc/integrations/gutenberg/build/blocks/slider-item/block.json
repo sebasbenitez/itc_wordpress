@@ -1,0 +1,10 @@
+{
+  "apiVersion": 3,
+  "title": "Slider item",
+  "name": "wd/slider-item",
+  "category": "xtemos",
+  "textdomain": "woodmart",
+  "parent": [
+    "wd/slider"
+  ]
+}
