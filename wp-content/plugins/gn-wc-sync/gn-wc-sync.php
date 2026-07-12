@@ -43,6 +43,9 @@ function gns_on_activate() {
         'sync_enabled'      => '0',
         'sync_interval'     => 'twicedaily',
         'rubros_permitidos' => '',
+        'skus_individuales' => '', // códigos puntuales que se importan SIEMPRE, sin importar el rubro
+        'mapeo_categorias' => '', // formato: "CategoriaGN=MiCategoriaWooCommerce", una por línea
+        'categoria_generica' => 'Sin clasificar', // se usa cuando no hay mapeo para la categoría de GN
         'estado_producto'   => 'draft',
         'dias_entrega_default' => '4',
         'umbral_stock_bajo' => '5', // [Asunción mía, ajustable] unidades o menos = "stock limitado"
@@ -91,6 +94,9 @@ function gns_sanitize_settings($input) {
     $clean['sync_enabled']  = isset($input['sync_enabled']) ? '1' : '0';
     $clean['sync_interval'] = sanitize_text_field($input['sync_interval'] ?? 'twicedaily');
     $clean['rubros_permitidos'] = sanitize_text_field($input['rubros_permitidos'] ?? '');
+    $clean['skus_individuales'] = sanitize_text_field($input['skus_individuales'] ?? '');
+    $clean['mapeo_categorias'] = sanitize_textarea_field($input['mapeo_categorias'] ?? '');
+    $clean['categoria_generica'] = sanitize_text_field($input['categoria_generica'] ?? 'Sin clasificar');
     $clean['estado_producto']   = in_array($input['estado_producto'] ?? 'draft', array('draft', 'publish'))
         ? $input['estado_producto']
         : 'draft';
@@ -173,6 +179,38 @@ function gns_render_admin_page() {
                     </td>
                 </tr>
                 <tr>
+                    <th scope="row">Productos individuales (por código)</th>
+                    <td>
+                        <input type="text" name="<?php echo GNS_OPTION_KEY; ?>[skus_individuales]" value="<?php echo esc_attr($opts['skus_individuales']); ?>" class="regular-text" placeholder="Ej: 195, 3402" />
+                        <p class="description">
+                            Códigos de producto de GN (<code>codigo</code>), separados por coma. Se importan
+                            <strong>siempre</strong>, sin importar el filtro de rubro de arriba.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Mapeo de categorías (GN → tu tienda)</th>
+                    <td>
+                        <textarea name="<?php echo GNS_OPTION_KEY; ?>[mapeo_categorias]" rows="6" class="large-text" placeholder="Cables y Adaptadores=Accesorios de Informatica&#10;Soportes=Soportes TV"><?php echo esc_textarea($opts['mapeo_categorias']); ?></textarea>
+                        <p class="description">
+                            Una equivalencia por línea, formato <code>CategoriaDeGN=TuCategoriaWooCommerce</code>.
+                            <strong>El plugin ya NO crea categorías nuevas a partir del nombre de GN.</strong>
+                            La categoría de destino tiene que existir ya en tu WooCommerce. Sin mapeo, el
+                            producto va a la "categoría genérica" de abajo.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Categoría genérica de respaldo</th>
+                    <td>
+                        <input type="text" name="<?php echo GNS_OPTION_KEY; ?>[categoria_generica]" value="<?php echo esc_attr($opts['categoria_generica']); ?>" class="regular-text" />
+                        <p class="description">
+                            Se usa cuando la categoría de GN no tiene mapeo definido. Esta SÍ se crea
+                            automáticamente la primera vez si no existe.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
                     <th scope="row">Estado del producto al crearlo</th>
                     <td>
                         <select name="<?php echo GNS_OPTION_KEY; ?>[estado_producto]">
@@ -249,6 +287,7 @@ function gns_add_meta_box() {
 function gns_render_meta_box($post) {
     $markup_pct   = get_post_meta($post->ID, '_gn_markup_pct', true);
     $precio_fijo  = get_post_meta($post->ID, '_gn_precio_fijo', true);
+    $categoria_fija = get_post_meta($post->ID, '_gn_categoria_fija', true);
     $dias_entrega = get_post_meta($post->ID, '_gn_dias_entrega', true);
     $opts = get_option(GNS_OPTION_KEY);
 
@@ -274,6 +313,14 @@ function gns_render_meta_box($post) {
     </p>
     <hr style="margin:10px 0;">
     <p>
+        <label>
+            <input type="checkbox" id="gns_categoria_fija" name="gns_categoria_fija" value="1" <?php checked($categoria_fija, '1'); ?> />
+            <strong>Categoría fija (no reasignar)</strong>
+        </label>
+    </p>
+    <p class="description">Si lo tildás, el sync nunca toca la categoría de este producto — la elegís vos con el selector normal de categorías.</p>
+    <hr style="margin:10px 0;">
+    <p>
         <label for="gns_dias_entrega"><strong>Días de entrega</strong></label><br>
         <input type="number" min="0" id="gns_dias_entrega" name="gns_dias_entrega"
                value="<?php echo esc_attr($dias_entrega); ?>" style="width:100%;" />
@@ -297,9 +344,204 @@ function gns_save_meta_box($post_id) {
         update_post_meta($post_id, '_gn_markup_pct', floatval($_POST['gns_markup_pct']));
     }
     update_post_meta($post_id, '_gn_precio_fijo', isset($_POST['gns_precio_fijo']) ? '1' : '');
+    update_post_meta($post_id, '_gn_categoria_fija', isset($_POST['gns_categoria_fija']) ? '1' : '');
     if (isset($_POST['gns_dias_entrega']) && $_POST['gns_dias_entrega'] !== '') {
         update_post_meta($post_id, '_gn_dias_entrega', max(0, intval($_POST['gns_dias_entrega'])));
     }
+}
+
+// ============================================================
+// BUSCADOR DE PRODUCTOS (selección manual, uno por uno)
+// ============================================================
+
+add_action('admin_menu', 'gns_add_buscador_menu');
+function gns_add_buscador_menu() {
+    add_submenu_page(
+        'gn-wc-sync',
+        'Buscador de productos',
+        'Buscador de productos',
+        'manage_woocommerce',
+        'gn-wc-sync-buscador',
+        'gns_render_buscador_page'
+    );
+}
+
+function gns_render_buscador_page() {
+    $opts = get_option(GNS_OPTION_KEY);
+    $clave_transient = 'gns_buscador_resultados_' . get_current_user_id();
+    $resultados = get_transient($clave_transient);
+    $mensaje = '';
+    $cotizacion_usd = get_transient('gns_buscador_cotizacion_' . get_current_user_id());
+
+    // --- Procesar búsqueda ---
+    if (isset($_POST['gns_buscador_action']) && $_POST['gns_buscador_action'] === 'buscar'
+        && check_admin_referer('gns_buscador_nonce_action', 'gns_buscador_nonce')) {
+
+        $rubro_busqueda = sanitize_text_field($_POST['rubro_busqueda'] ?? '');
+
+        if ($rubro_busqueda === '') {
+            $mensaje = 'Escribí un rubro para buscar.';
+        } else {
+            try {
+                $token = gns_get_token();
+                $cotizacion_usd = gns_get_exchange_rate($token);
+                $catalogo = gns_get_catalog($token);
+                $resultados = array();
+
+                foreach ($catalogo as $item) {
+                    $candidatos = array();
+                    if (!empty($item['categoria'])) $candidatos[] = $item['categoria'];
+                    if (!empty($item['subcategoria'])) $candidatos[] = $item['subcategoria'];
+
+                    foreach ($candidatos as $c) {
+                        if (mb_stripos($c, $rubro_busqueda) !== false) {
+                            $resultados[] = $item;
+                            break;
+                        }
+                    }
+                }
+
+                set_transient($clave_transient, $resultados, HOUR_IN_SECONDS);
+                set_transient('gns_buscador_cotizacion_' . get_current_user_id(), $cotizacion_usd, HOUR_IN_SECONDS);
+                $mensaje = 'Se encontraron ' . count($resultados) . ' productos para "' . esc_html($rubro_busqueda) . '" (GN solo devuelve productos con stock positivo).';
+            } catch (Exception $e) {
+                $mensaje = 'Error al buscar en GN: ' . $e->getMessage();
+            }
+        }
+    }
+
+    // --- Procesar importación de los seleccionados ---
+    if (isset($_POST['gns_buscador_action']) && $_POST['gns_buscador_action'] === 'importar'
+        && check_admin_referer('gns_buscador_nonce_action', 'gns_buscador_nonce')) {
+
+        $seleccionados = isset($_POST['seleccionados']) ? array_map('sanitize_text_field', (array) $_POST['seleccionados']) : array();
+        $categoria_destino_id = intval($_POST['categoria_destino'] ?? 0);
+
+        if (empty($seleccionados)) {
+            $mensaje = 'No tildaste ningún producto.';
+        } elseif ($categoria_destino_id <= 0) {
+            $mensaje = 'Tenés que elegir una categoría de destino antes de importar.';
+        } elseif (!is_array($resultados) || !$cotizacion_usd) {
+            $mensaje = 'La búsqueda expiró (dura 1 hora). Volvé a buscar el rubro.';
+        } else {
+            $creados = 0; $actualizados = 0; $errores = 0;
+            foreach ($resultados as $item) {
+                $clave_item = (string) ($item['codigo'] ?: $item['item_id']);
+                if (in_array($clave_item, $seleccionados, true)) {
+                    try {
+                        $accion = gns_upsert_producto($item, $opts, $cotizacion_usd, $categoria_destino_id);
+                        if ($accion === 'creado') $creados++;
+                        elseif ($accion === 'actualizado') $actualizados++;
+                    } catch (Exception $e) {
+                        $errores++;
+                    }
+                }
+            }
+            $mensaje = "Importación manual completa — Creados: $creados, Actualizados: $actualizados, Errores: $errores";
+            delete_transient($clave_transient);
+            delete_transient('gns_buscador_cotizacion_' . get_current_user_id());
+            $resultados = null;
+        }
+    }
+
+    ?>
+    <div class="wrap">
+        <h1>Buscador de productos Grupo Núcleo</h1>
+        <p class="description">
+            Buscá un rubro, mirá los productos reales (con imagen y precio) y elegí a mano
+            cuáles traer a tu tienda, con la categoría de destino que vos definas.
+        </p>
+
+        <?php if ($mensaje): ?>
+            <div class="notice notice-info"><p><?php echo esc_html($mensaje); ?></p></div>
+        <?php endif; ?>
+
+        <form method="post">
+            <?php wp_nonce_field('gns_buscador_nonce_action', 'gns_buscador_nonce'); ?>
+            <input type="hidden" name="gns_buscador_action" value="buscar" />
+            <p>
+                <input type="text" name="rubro_busqueda" placeholder="Ej: Soportes" class="regular-text" />
+                <?php submit_button('Buscar en GN', 'primary', 'submit', false); ?>
+            </p>
+        </form>
+
+        <?php if (is_array($resultados) && !empty($resultados)): ?>
+            <hr>
+            <form method="post">
+                <?php wp_nonce_field('gns_buscador_nonce_action', 'gns_buscador_nonce'); ?>
+                <input type="hidden" name="gns_buscador_action" value="importar" />
+
+                <p>
+                    <label for="categoria_destino"><strong>Categoría de destino para TODOS los que tildes abajo:</strong></label><br>
+                    <?php
+                    wp_dropdown_categories(array(
+                        'taxonomy'         => 'product_cat',
+                        'name'             => 'categoria_destino',
+                        'show_option_none' => '-- Elegir categoría --',
+                        'hide_empty'       => false,
+                        'id'               => 'categoria_destino',
+                    ));
+                    ?>
+                </p>
+
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"><input type="checkbox" onclick="document.querySelectorAll('.gns-check-item').forEach(c => c.checked = this.checked)" /></th>
+                            <th style="width:70px;">Imagen</th>
+                            <th>Nombre</th>
+                            <th>Código</th>
+                            <th>Precio estimado (ARS)</th>
+                            <th>Stock (MDP+CABA)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($resultados as $item):
+                            $clave_item = (string) ($item['codigo'] ?: $item['item_id']);
+                            $stock_total = intval($item['stock_mdp'] ?? 0) + intval($item['stock_caba'] ?? 0);
+
+                            // Precio ESTIMADO para la vista previa: neto + impuestos (IVA)
+                            // convertido a ARS con la cotización del momento, aplicando el
+                            // markup por defecto configurado. [Importante] Es una estimación:
+                            // si el producto ya existe con un markup propio distinto, o si lo
+                            // marcaste como "Precio fijo", el precio final real podría diferir
+                            // de este número — esto es solo para orientarte antes de importar.
+                            $precio_neto_usd_prev = floatval($item['precioNeto_USD'] ?? 0);
+                            $total_impuestos_prev = 0;
+                            foreach (($item['impuestos'] ?? array()) as $imp) {
+                                $total_impuestos_prev += floatval($imp['imp_porcentaje'] ?? 0);
+                            }
+                            $precio_final_usd_prev = $precio_neto_usd_prev * (1 + ($total_impuestos_prev / 100));
+                            $precio_ars_prev = $precio_final_usd_prev * $cotizacion_usd * floatval($opts['markup']);
+                        ?>
+                            <tr>
+                                <td><input type="checkbox" class="gns-check-item" name="seleccionados[]" value="<?php echo esc_attr($clave_item); ?>" /></td>
+                                <td>
+                                    <?php if (!empty($item['url_imagenes'][0]['url'])): ?>
+                                        <img src="<?php echo esc_url($item['url_imagenes'][0]['url']); ?>" style="max-width:50px;max-height:50px;" />
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo esc_html($item['item_desc_1'] ?? ($item['item_desc_0'] ?? '')); ?></td>
+                                <td><?php echo esc_html($clave_item); ?></td>
+                                <td>$<?php echo esc_html(number_format($precio_ars_prev, 2, ',', '.')); ?></td>
+                                <td><?php echo esc_html($stock_total); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+
+                <p class="description">
+                    Precio estimado con la cotización del momento (<?php echo esc_html($cotizacion_usd); ?>)
+                    y tu markup por defecto (<?php echo esc_html((floatval($opts['markup']) - 1) * 100); ?>%).
+                    Si el producto es nuevo, este va a ser el precio real al importarlo. Si ya existe con
+                    un markup propio distinto, el precio final real puede variar de esta estimación.
+                </p>
+
+                <p><?php submit_button('Importar seleccionados', 'primary', 'submit', false); ?></p>
+            </form>
+        <?php endif; ?>
+    </div>
+    <?php
 }
 
 // ============================================================
@@ -418,9 +660,65 @@ function gns_categoria_permitida($item, $opts) {
     return false;
 }
 
-function gns_upsert_producto($item, $opts, $cotizacion_usd) {
-    if (!gns_categoria_permitida($item, $opts)) {
-        return 'omitido_rubro';
+/**
+ * Resuelve a qué categoría de WooCommerce (ya existente) debe ir un
+ * producto de GN, según el mapeo configurado. Igual mecanismo que Invid:
+ * nunca crea categorías nuevas a partir del nombre crudo de GN, salvo
+ * la genérica de respaldo (una sola, decisión explícita del usuario).
+ */
+function gns_resolver_categoria_mapeada($nombre_categoria_gn, $opts) {
+    $mapeo_raw = trim($opts['mapeo_categorias'] ?? '');
+    $mapeo = array();
+    if ($mapeo_raw !== '') {
+        foreach (preg_split('/\r\n|\r|\n/', $mapeo_raw) as $linea) {
+            $linea = trim($linea);
+            if ($linea === '' || strpos($linea, '=') === false) {
+                continue;
+            }
+            list($gn_nombre, $woo_nombre) = array_map('trim', explode('=', $linea, 2));
+            $mapeo[mb_strtolower($gn_nombre)] = $woo_nombre;
+        }
+    }
+
+    $categoria_generica_nombre = trim($opts['categoria_generica'] ?? 'Sin clasificar');
+
+    if ($nombre_categoria_gn && isset($mapeo[mb_strtolower(trim($nombre_categoria_gn))])) {
+        $nombre_woo_destino = $mapeo[mb_strtolower(trim($nombre_categoria_gn))];
+        $term = get_term_by('name', $nombre_woo_destino, 'product_cat');
+        if ($term) {
+            return $term->term_id;
+        }
+        gns_log("AVISO: el mapeo dice \"$nombre_categoria_gn\" -> \"$nombre_woo_destino\", pero esa categoría no existe en WooCommerce. Usando la genérica.");
+    }
+
+    $term = get_term_by('name', $categoria_generica_nombre, 'product_cat');
+    if (!$term) {
+        $result = wp_insert_term($categoria_generica_nombre, 'product_cat');
+        return is_wp_error($result) ? null : $result['term_id'];
+    }
+    return $term->term_id;
+}
+
+function gns_sku_en_lista_individual($item, $opts) {
+    $lista_raw = trim($opts['skus_individuales'] ?? '');
+    if ($lista_raw === '') {
+        return false;
+    }
+    $codigos_permitidos = array_map(function ($c) {
+        return mb_strtolower(trim($c));
+    }, explode(',', $lista_raw));
+
+    $codigo_item = mb_strtolower(trim($item['codigo'] ?? ''));
+    $id_item = mb_strtolower(trim((string) ($item['item_id'] ?? '')));
+
+    return in_array($codigo_item, $codigos_permitidos, true) || in_array($id_item, $codigos_permitidos, true);
+}
+
+function gns_upsert_producto($item, $opts, $cotizacion_usd, $forzar_categoria_id = null) {
+    if ($forzar_categoria_id === null) {
+        if (!gns_categoria_permitida($item, $opts) && !gns_sku_en_lista_individual($item, $opts)) {
+            return 'omitido_rubro';
+        }
     }
 
     $stock_mdp  = intval($item['stock_mdp'] ?? 0);
@@ -519,17 +817,19 @@ function gns_upsert_producto($item, $opts, $cotizacion_usd) {
     if (isset($item['ancho_cm'])) $product->set_width($item['ancho_cm']);
     if (isset($item['alto_cm']))  $product->set_height($item['alto_cm']);
 
-    // Categoría: usamos "categoria" (o "subcategoria" si existe, como
-    // categoría más específica). Se crea en WooCommerce si no existe.
-    $nombre_categoria = $item['subcategoria'] ?? ($item['categoria'] ?? null);
-    if ($nombre_categoria) {
-        $term = get_term_by('name', $nombre_categoria, 'product_cat');
-        if (!$term) {
-            $result = wp_insert_term($nombre_categoria, 'product_cat');
-            $term_id = is_wp_error($result) ? null : $result['term_id'];
-        } else {
-            $term_id = $term->term_id;
-        }
+    // Categoría: se resuelve por mapeo controlado (no se crean categorías
+    // nuevas a partir del nombre crudo de GN), salvo que el producto tenga
+    // "Categoría fija" tildada, o que venga forzada desde el Buscador manual.
+    $categoria_fija = $product_id_existente
+        ? (get_post_meta($product_id_existente, '_gn_categoria_fija', true) === '1')
+        : false;
+
+    if ($forzar_categoria_id !== null) {
+        $product->set_category_ids(array(intval($forzar_categoria_id)));
+        $categoria_fija = true; // evita que el bloque de abajo la pise
+    } elseif (!$categoria_fija) {
+        $nombre_categoria_gn = $item['subcategoria'] ?? ($item['categoria'] ?? null);
+        $term_id = gns_resolver_categoria_mapeada($nombre_categoria_gn, $opts);
         if ($term_id) {
             $product->set_category_ids(array($term_id));
         }
@@ -556,6 +856,10 @@ function gns_upsert_producto($item, $opts, $cotizacion_usd) {
     }
     if (get_post_meta($product->get_id(), '_gn_dias_entrega', true) === '') {
         update_post_meta($product->get_id(), '_gn_dias_entrega', intval($opts['dias_entrega_default']));
+    }
+
+    if ($forzar_categoria_id !== null) {
+        update_post_meta($product->get_id(), '_gn_categoria_fija', '1');
     }
 
     return $accion;

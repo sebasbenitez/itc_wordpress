@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Invid WooCommerce Sync
  * Description: Sincroniza el catálogo de Invid Computers con WooCommerce. Activable/desactivable y configurable desde el admin.
- * Version: 2.0.0
+ * Version: 1.0.0
  * Author: ITCentro
  * Text Domain: invid-wc-sync
  *
@@ -31,10 +31,14 @@ function ivs_on_activate() {
         'invid_username'    => '',
         'invid_password'    => '',
         'usd_to_ars'        => '1450',
+        'modo_cotizacion'   => 'automatico', // 'automatico' (DolarAPI oficial) o 'manual' (usd_to_ars fijo)
         'markup'            => '1.35',
         'sync_enabled'      => '0', // arranca apagado hasta que el usuario lo prenda
         'sync_interval'     => 'twicedaily',
         'rubros_permitidos' => '', // vacío = importa todo (no recomendado)
+        'skus_individuales' => '', // códigos puntuales que se importan SIEMPRE, sin importar el rubro
+        'mapeo_categorias' => '', // formato: "CategoriaInvid=MiCategoriaWooCommerce", una por línea
+        'categoria_generica' => 'Sin clasificar', // se usa cuando no hay mapeo para la categoría de Invid
         'estado_producto'   => 'draft', // draft = borrador, publish = publicado directo
         'dias_entrega_default' => '4',
     );
@@ -78,10 +82,16 @@ function ivs_sanitize_settings($input) {
     $clean['invid_username'] = sanitize_text_field($input['invid_username'] ?? '');
     $clean['invid_password'] = sanitize_text_field($input['invid_password'] ?? '');
     $clean['usd_to_ars']     = floatval($input['usd_to_ars'] ?? 1450);
+    $clean['modo_cotizacion'] = in_array($input['modo_cotizacion'] ?? 'automatico', array('automatico', 'manual'), true)
+        ? $input['modo_cotizacion']
+        : 'automatico';
     $clean['markup']         = floatval($input['markup'] ?? 1.35);
     $clean['sync_enabled']   = isset($input['sync_enabled']) ? '1' : '0';
     $clean['sync_interval']  = sanitize_text_field($input['sync_interval'] ?? 'twicedaily');
     $clean['rubros_permitidos'] = sanitize_text_field($input['rubros_permitidos'] ?? '');
+    $clean['skus_individuales'] = sanitize_text_field($input['skus_individuales'] ?? '');
+    $clean['mapeo_categorias'] = sanitize_textarea_field($input['mapeo_categorias'] ?? '');
+    $clean['categoria_generica'] = sanitize_text_field($input['categoria_generica'] ?? 'Sin clasificar');
     $clean['estado_producto']   = in_array($input['estado_producto'] ?? 'draft', array('draft', 'publish'))
         ? $input['estado_producto']
         : 'draft';
@@ -148,7 +158,23 @@ function ivs_render_admin_page() {
                     <th scope="row">Tipo de cambio USD → ARS</th>
                     <td>
                         <input type="number" step="0.01" name="<?php echo IVS_OPTION_KEY; ?>[usd_to_ars]" value="<?php echo esc_attr($opts['usd_to_ars']); ?>" class="regular-text" />
-                        <p class="description">Valor fijo. Actualizalo manualmente según el dólar del día. [Recordá: esto se desactualiza rápido]</p>
+                        <p class="description">Valor fijo. Solo se usa si el modo de cotización de abajo está en "Manual", o como respaldo si falla la consulta automática.</p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Modo de cotización</th>
+                    <td>
+                        <select name="<?php echo IVS_OPTION_KEY; ?>[modo_cotizacion]">
+                            <option value="automatico" <?php selected($opts['modo_cotizacion'], 'automatico'); ?>>Automático (DolarAPI, dólar oficial)</option>
+                            <option value="manual" <?php selected($opts['modo_cotizacion'], 'manual'); ?>>Manual (uso el valor fijo de arriba)</option>
+                        </select>
+                        <p class="description">
+                            [Confianza media] En modo automático, cada sincronización consulta
+                            <code>https://dolarapi.com/v1/dolares/oficial</code> (dólar oficial, campo <code>venta</code>)
+                            antes de calcular precios. Si esa consulta falla por cualquier motivo
+                            (el servicio no responde, etc.), el plugin usa automáticamente el valor
+                            fijo de arriba como respaldo, y lo deja anotado en el log.
+                        </p>
                     </td>
                 </tr>
                 <tr>
@@ -166,6 +192,42 @@ function ivs_render_admin_page() {
                             Nombres de categoría de Invid (<code>CATEGORY</code>), separados por coma, tal como aparecen en su catálogo.
                             <strong>Dejalo vacío e importa TODO el catálogo de Invid</strong> — no recomendado salvo que sea intencional.
                             La comparación no distingue mayúsculas/minúsculas ni espacios extra.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Productos individuales (por código)</th>
+                    <td>
+                        <input type="text" name="<?php echo IVS_OPTION_KEY; ?>[skus_individuales]" value="<?php echo esc_attr($opts['skus_individuales']); ?>" class="regular-text" placeholder="Ej: V11HB72221, 0418324" />
+                        <p class="description">
+                            Códigos de producto de Invid (<code>PART_NUMBER</code>), separados por coma.
+                            Estos productos se importan <strong>siempre</strong>, sin importar el filtro de
+                            "Rubros a importar" de arriba — útil para traer un modelo puntual (ej. una
+                            impresora láser) sin tener que habilitar todo el rubro de impresoras.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Mapeo de categorías (Invid → tu tienda)</th>
+                    <td>
+                        <textarea name="<?php echo IVS_OPTION_KEY; ?>[mapeo_categorias]" rows="6" class="large-text" placeholder="Proyectores=Proyectores y Pantallas&#10;Mouse=Perifericos"><?php echo esc_textarea($opts['mapeo_categorias']); ?></textarea>
+                        <p class="description">
+                            Una equivalencia por línea, formato <code>CategoriaDeInvid=TuCategoriaWooCommerce</code>.
+                            <strong>Importante: el plugin ya NO crea categorías nuevas a partir del nombre de Invid.</strong>
+                            La categoría de destino (después del <code>=</code>) tiene que ser una que ya
+                            exista en tu WooCommerce. Si Invid trae una categoría que no mapeaste acá,
+                            el producto va a la "categoría genérica" de abajo.
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">Categoría genérica de respaldo</th>
+                    <td>
+                        <input type="text" name="<?php echo IVS_OPTION_KEY; ?>[categoria_generica]" value="<?php echo esc_attr($opts['categoria_generica']); ?>" class="regular-text" />
+                        <p class="description">
+                            Se usa cuando la categoría de Invid no tiene mapeo definido. Esta categoría
+                            SÍ se crea automáticamente la primera vez si no existe (a diferencia de las
+                            categorías de Invid, que nunca se crean solas).
                         </p>
                     </td>
                 </tr>
@@ -257,6 +319,7 @@ function ivs_add_markup_meta_box() {
 function ivs_render_markup_meta_box($post) {
     $markup_pct = get_post_meta($post->ID, '_invid_markup_pct', true);
     $precio_fijo = get_post_meta($post->ID, '_invid_precio_fijo', true);
+    $categoria_fija = get_post_meta($post->ID, '_invid_categoria_fija', true);
     $dias_entrega = get_post_meta($post->ID, '_invid_dias_entrega', true);
     $opts = get_option(IVS_OPTION_KEY);
     if ($markup_pct === '') {
@@ -297,6 +360,19 @@ function ivs_render_markup_meta_box($post) {
     </p>
     <hr style="margin:10px 0;">
     <p>
+        <label>
+            <input type="checkbox" id="ivs_categoria_fija" name="ivs_categoria_fija" value="1" <?php checked($categoria_fija, '1'); ?> />
+            <strong>Categoría fija (no reasignar)</strong>
+        </label>
+    </p>
+    <p class="description">
+        Si lo tildás, el sync <strong>nunca va a tocar la categoría</strong> de este
+        producto. Usá el selector de "Categorías del producto" de más abajo
+        para elegir vos mismo dónde va, y quedará así para siempre (salvo
+        que destildes esta casilla).
+    </p>
+    <hr style="margin:10px 0;">
+    <p>
         <label for="ivs_dias_entrega"><strong>Días de entrega (dropshipping)</strong></label><br>
         <input type="number" min="0" id="ivs_dias_entrega" name="ivs_dias_entrega"
                value="<?php echo esc_attr($dias_entrega); ?>" style="width:100%;" />
@@ -326,6 +402,7 @@ function ivs_save_markup_meta_box($post_id) {
         update_post_meta($post_id, '_invid_markup_pct', floatval($_POST['ivs_markup_pct']));
     }
     update_post_meta($post_id, '_invid_precio_fijo', isset($_POST['ivs_precio_fijo']) ? '1' : '');
+    update_post_meta($post_id, '_invid_categoria_fija', isset($_POST['ivs_categoria_fija']) ? '1' : '');
     if (isset($_POST['ivs_dias_entrega']) && $_POST['ivs_dias_entrega'] !== '') {
         update_post_meta($post_id, '_invid_dias_entrega', max(0, intval($_POST['ivs_dias_entrega'])));
     }
@@ -365,6 +442,203 @@ function ivs_mostrar_aviso_entrega() {
     echo '<p class="ivs-aviso-entrega" style="margin:8px 0;font-size:0.95em;color:#555;">'
         . '<span class="dashicons dashicons-clock" style="font-size:1em;vertical-align:middle;"></span> '
         . esc_html($texto) . '</p>';
+}
+
+// ============================================================
+// BUSCADOR DE PRODUCTOS (selección manual, uno por uno)
+// ============================================================
+
+add_action('admin_menu', 'ivs_add_buscador_menu');
+function ivs_add_buscador_menu() {
+    add_submenu_page(
+        'invid-wc-sync',
+        'Buscador de productos',
+        'Buscador de productos',
+        'manage_woocommerce',
+        'invid-wc-sync-buscador',
+        'ivs_render_buscador_page'
+    );
+}
+
+function ivs_render_buscador_page() {
+    $opts = get_option(IVS_OPTION_KEY);
+    $clave_transient = 'ivs_buscador_resultados_' . get_current_user_id();
+    $resultados = get_transient($clave_transient);
+    $mensaje = '';
+
+    // --- Procesar búsqueda ---
+    if (isset($_POST['ivs_buscador_action']) && $_POST['ivs_buscador_action'] === 'buscar'
+        && check_admin_referer('ivs_buscador_nonce_action', 'ivs_buscador_nonce')) {
+
+        $rubro_busqueda = sanitize_text_field($_POST['rubro_busqueda'] ?? '');
+
+        if ($rubro_busqueda === '') {
+            $mensaje = 'Escribí un rubro para buscar.';
+        } else {
+            try {
+                // Misma lógica de cotización que en el sync automático:
+                // intenta DolarAPI, si falla usa el valor fijo de respaldo.
+                $cotizacion_para_preview = floatval($opts['usd_to_ars']);
+                if (($opts['modo_cotizacion'] ?? 'automatico') === 'automatico') {
+                    try {
+                        $cotizacion_para_preview = ivs_obtener_cotizacion_dolar_oficial();
+                    } catch (Exception $e) {
+                        // Silenciosamente usamos el valor fijo de respaldo acá;
+                        // no es necesario loguear en el buscador manual.
+                    }
+                }
+                set_transient('ivs_buscador_cotizacion_' . get_current_user_id(), $cotizacion_para_preview, HOUR_IN_SECONDS);
+
+                $token = ivs_get_invid_token();
+                $catalogo = ivs_get_invid_catalog($token);
+                $resultados = array();
+
+                foreach ($catalogo as $item) {
+                    $estado_stock = $item['STOCK_STATUS'] ?? '';
+                    if (!in_array($estado_stock, array('STOCK OK', 'BAJO STOCK'), true)) {
+                        continue; // seguimos respetando la regla de stock
+                    }
+
+                    $candidatos = array();
+                    if (!empty($item['CATEGORY'])) $candidatos[] = $item['CATEGORY'];
+                    foreach (($item['CATEGORIES'] ?? array()) as $cat) {
+                        if (!empty($cat['NAME'])) $candidatos[] = $cat['NAME'];
+                        if (!empty($cat['PARENT']['NAME'])) $candidatos[] = $cat['PARENT']['NAME'];
+                    }
+
+                    foreach ($candidatos as $c) {
+                        if (mb_stripos($c, $rubro_busqueda) !== false) {
+                            $resultados[] = $item;
+                            break;
+                        }
+                    }
+                }
+
+                set_transient($clave_transient, $resultados, HOUR_IN_SECONDS);
+                $mensaje = 'Se encontraron ' . count($resultados) . ' productos para "' . esc_html($rubro_busqueda) . '" (con stock disponible).';
+            } catch (Exception $e) {
+                $mensaje = 'Error al buscar en Invid: ' . $e->getMessage();
+            }
+        }
+    }
+
+    // --- Procesar importación de los seleccionados ---
+    if (isset($_POST['ivs_buscador_action']) && $_POST['ivs_buscador_action'] === 'importar'
+        && check_admin_referer('ivs_buscador_nonce_action', 'ivs_buscador_nonce')) {
+
+        $seleccionados = isset($_POST['seleccionados']) ? array_map('sanitize_text_field', (array) $_POST['seleccionados']) : array();
+        $categoria_destino_id = intval($_POST['categoria_destino'] ?? 0);
+
+        if (empty($seleccionados)) {
+            $mensaje = 'No tildaste ningún producto.';
+        } elseif ($categoria_destino_id <= 0) {
+            $mensaje = 'Tenés que elegir una categoría de destino antes de importar.';
+        } elseif (!is_array($resultados)) {
+            $mensaje = 'La búsqueda expiró (dura 1 hora). Volvé a buscar el rubro.';
+        } else {
+            $creados = 0; $actualizados = 0; $errores = 0;
+            foreach ($resultados as $item) {
+                $clave_item = (string) ($item['PART_NUMBER'] ?: $item['ID']);
+                if (in_array($clave_item, $seleccionados, true)) {
+                    try {
+                        $accion = ivs_upsert_producto($item, $opts, $categoria_destino_id);
+                        if ($accion === 'creado') $creados++;
+                        elseif ($accion === 'actualizado') $actualizados++;
+                    } catch (Exception $e) {
+                        $errores++;
+                    }
+                }
+            }
+            $mensaje = "Importación manual completa — Creados: $creados, Actualizados: $actualizados, Errores: $errores";
+            delete_transient($clave_transient);
+            $resultados = null;
+        }
+    }
+
+    ?>
+    <div class="wrap">
+        <h1>Buscador de productos Invid</h1>
+        <p class="description">
+            Buscá un rubro, mirá los productos reales (con imagen y precio) y elegí a mano
+            cuáles traer a tu tienda — a diferencia del sync automático, acá vos decidís
+            producto por producto, y elegís vos mismo a qué categoría de tu tienda va todo
+            el lote que selecciones.
+        </p>
+
+        <?php if ($mensaje): ?>
+            <div class="notice notice-info"><p><?php echo esc_html($mensaje); ?></p></div>
+        <?php endif; ?>
+
+        <form method="post">
+            <?php wp_nonce_field('ivs_buscador_nonce_action', 'ivs_buscador_nonce'); ?>
+            <input type="hidden" name="ivs_buscador_action" value="buscar" />
+            <p>
+                <input type="text" name="rubro_busqueda" placeholder="Ej: Impresoras" class="regular-text" />
+                <?php submit_button('Buscar en Invid', 'primary', 'submit', false); ?>
+            </p>
+        </form>
+
+        <?php if (is_array($resultados) && !empty($resultados)): ?>
+            <hr>
+            <form method="post">
+                <?php wp_nonce_field('ivs_buscador_nonce_action', 'ivs_buscador_nonce'); ?>
+                <input type="hidden" name="ivs_buscador_action" value="importar" />
+
+                <p>
+                    <label for="categoria_destino"><strong>Categoría de destino para TODOS los que tildes abajo:</strong></label><br>
+                    <?php
+                    wp_dropdown_categories(array(
+                        'taxonomy'         => 'product_cat',
+                        'name'             => 'categoria_destino',
+                        'show_option_none' => '-- Elegir categoría --',
+                        'hide_empty'       => false,
+                        'id'               => 'categoria_destino',
+                    ));
+                    ?>
+                </p>
+
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"><input type="checkbox" onclick="document.querySelectorAll('.ivs-check-item').forEach(c => c.checked = this.checked)" /></th>
+                            <th style="width:70px;">Imagen</th>
+                            <th>Nombre</th>
+                            <th>Código</th>
+                            <th>Precio estimado (ARS)</th>
+                            <th>Stock</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php
+                        $cotizacion_preview = get_transient('ivs_buscador_cotizacion_' . get_current_user_id());
+                        if (!$cotizacion_preview) {
+                            $cotizacion_preview = floatval($opts['usd_to_ars']); // respaldo si el transient venció
+                        }
+                        foreach ($resultados as $item):
+                            $clave_item = (string) ($item['PART_NUMBER'] ?: $item['ID']);
+                            $precio_ars_prev = floatval($item['FINAL_PRICE'] ?? 0) * $cotizacion_preview * floatval($opts['markup']);
+                        ?>
+                            <tr>
+                                <td><input type="checkbox" class="ivs-check-item" name="seleccionados[]" value="<?php echo esc_attr($clave_item); ?>" /></td>
+                                <td>
+                                    <?php if (!empty($item['IMAGE_URL'])): ?>
+                                        <img src="<?php echo esc_url($item['IMAGE_URL']); ?>" style="max-width:50px;max-height:50px;" />
+                                    <?php endif; ?>
+                                </td>
+                                <td><?php echo esc_html($item['TITLE'] ?? ''); ?></td>
+                                <td><?php echo esc_html($clave_item); ?></td>
+                                <td>$<?php echo esc_html(number_format($precio_ars_prev, 2, ',', '.')); ?></td>
+                                <td><?php echo esc_html($item['STOCK_STATUS'] ?? ''); ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+
+                <p><?php submit_button('Importar seleccionados', 'primary', 'submit', false); ?></p>
+            </form>
+        <?php endif; ?>
+    </div>
+    <?php
 }
 
 // ============================================================
@@ -480,14 +754,86 @@ function ivs_categoria_permitida($item, $opts) {
     return false;
 }
 
-function ivs_upsert_producto($item, $opts) {
+function ivs_sku_en_lista_individual($item, $opts) {
+    $lista_raw = trim($opts['skus_individuales'] ?? '');
+    if ($lista_raw === '') {
+        return false;
+    }
+
+    $codigos_permitidos = array_map(function ($c) {
+        return mb_strtolower(trim($c));
+    }, explode(',', $lista_raw));
+
+    $sku_item = mb_strtolower(trim($item['PART_NUMBER'] ?? ''));
+    $id_item  = mb_strtolower(trim((string) ($item['ID'] ?? '')));
+
+    return in_array($sku_item, $codigos_permitidos, true) || in_array($id_item, $codigos_permitidos, true);
+}
+
+/**
+ * Resuelve a qué categoría de WooCommerce (ya existente) debe ir un
+ * producto, según el nombre de categoría que trae Invid.
+ *
+ * - Si hay un mapeo configurado para ese nombre, busca esa categoría
+ *   EXISTENTE en WooCommerce (no la crea si no existe — para evitar
+ *   errores de tipeo silenciosos, cae a la genérica y lo deja en el log).
+ * - Si no hay mapeo, usa la categoría genérica de respaldo (esta sí se
+ *   crea automáticamente la primera vez, porque es una decisión tuya
+ *   explícita, no un nombre arbitrario de Invid).
+ */
+function ivs_resolver_categoria_mapeada($nombre_categoria_invid, $opts) {
+    $mapeo_raw = trim($opts['mapeo_categorias'] ?? '');
+    $mapeo = array();
+    if ($mapeo_raw !== '') {
+        foreach (preg_split('/\r\n|\r|\n/', $mapeo_raw) as $linea) {
+            $linea = trim($linea);
+            if ($linea === '' || strpos($linea, '=') === false) {
+                continue;
+            }
+            list($invid_nombre, $woo_nombre) = array_map('trim', explode('=', $linea, 2));
+            $mapeo[mb_strtolower($invid_nombre)] = $woo_nombre;
+        }
+    }
+
+    $categoria_generica_nombre = trim($opts['categoria_generica'] ?? 'Sin clasificar');
+
+    if ($nombre_categoria_invid && isset($mapeo[mb_strtolower(trim($nombre_categoria_invid))])) {
+        $nombre_woo_destino = $mapeo[mb_strtolower(trim($nombre_categoria_invid))];
+        $term = get_term_by('name', $nombre_woo_destino, 'product_cat');
+        if ($term) {
+            return $term->term_id;
+        }
+        // El mapeo apunta a una categoría que no existe (typo, o la
+        // borraste) — no la creamos silenciosamente, avisamos en el log
+        // y usamos la genérica como respaldo seguro.
+        ivs_log("AVISO: el mapeo dice \"$nombre_categoria_invid\" -> \"$nombre_woo_destino\", pero esa categoría no existe en WooCommerce. Usando la genérica.");
+    }
+
+    // Sin mapeo (o mapeo roto): va a la categoría genérica de respaldo.
+    // Esta SÍ se crea automáticamente la primera vez, porque es una
+    // categoría que vos elegiste a propósito, no un nombre de Invid.
+    $term = get_term_by('name', $categoria_generica_nombre, 'product_cat');
+    if (!$term) {
+        $result = wp_insert_term($categoria_generica_nombre, 'product_cat');
+        return is_wp_error($result) ? null : $result['term_id'];
+    }
+    return $term->term_id;
+}
+
+function ivs_upsert_producto($item, $opts, $forzar_categoria_id = null) {
     $estado_stock = $item['STOCK_STATUS'] ?? '';
     if (!in_array($estado_stock, array('STOCK OK', 'BAJO STOCK'), true)) {
         return 'omitido_stock'; // otros estados (ej. sin stock) sí se excluyen
     }
 
-    if (!ivs_categoria_permitida($item, $opts)) {
-        return 'omitido_rubro';
+    // Si viene de una selección manual del "Buscador de productos"
+    // ($forzar_categoria_id no es null), el usuario ya decidió a mano
+    // que quiere este producto — nos saltamos el filtro de rubro por
+    // completo. Si viene del sync automático, aplica el filtro normal.
+    if ($forzar_categoria_id === null) {
+        if (!ivs_categoria_permitida($item, $opts) && !ivs_sku_en_lista_individual($item, $opts)) {
+            return 'omitido_rubro';
+        }
     }
 
     $sku = $item['PART_NUMBER'] ?: $item['ID'];
@@ -589,30 +935,39 @@ function ivs_upsert_producto($item, $opts) {
         $product->set_height($item['HEIGHT']);
     }
 
-    // Categoría: usa la primaria si existe, si no la primera de la lista.
-    // NOTA: esto crea la categoría en WooCommerce si no existe todavía,
-    // usando el nombre tal cual viene de Invid. Si preferís mapear a tus
-    // propias categorías, esta parte hay que reemplazarla por un array
-    // de equivalencias Invid -> WooCommerce.
-    $categorias = $item['CATEGORIES'] ?? array();
-    $nombre_categoria = null;
-    foreach ($categorias as $cat) {
-        if (!empty($cat['IS_PRIMARY'])) {
-            $nombre_categoria = $cat['NAME'];
-            break;
+    // Categoría: SOLO se toca si el producto no tiene "Categoría fija"
+    // marcada (mismo patrón que "Precio fijo"). Ya NO se crean categorías
+    // nuevas a partir del nombre crudo de Invid — se usa la tabla de
+    // mapeo que vos definís, y si no hay mapeo, cae en la categoría
+    // genérica de respaldo. Esto evita que se te llene la tienda de
+    // categorías que no pediste.
+    $categoria_fija = $product_id_existente
+        ? (get_post_meta($product_id_existente, '_invid_categoria_fija', true) === '1')
+        : false;
+
+    if ($forzar_categoria_id !== null) {
+        // Viene del "Buscador de productos": el usuario eligió la
+        // categoría a mano, así que la aplicamos directo y la marcamos
+        // como fija para que el sync automático nunca se la pise después.
+        $product->set_category_ids(array(intval($forzar_categoria_id)));
+        $categoria_fija = true; // para que más abajo no la sobreescriba
+    } elseif (!$categoria_fija) {
+        $categorias = $item['CATEGORIES'] ?? array();
+        $nombre_categoria_invid = null;
+        foreach ($categorias as $cat) {
+            if (!empty($cat['IS_PRIMARY'])) {
+                $nombre_categoria_invid = $cat['NAME'];
+                break;
+            }
         }
-    }
-    if (!$nombre_categoria && !empty($categorias)) {
-        $nombre_categoria = $categorias[0]['NAME'];
-    }
-    if ($nombre_categoria) {
-        $term = get_term_by('name', $nombre_categoria, 'product_cat');
-        if (!$term) {
-            $result = wp_insert_term($nombre_categoria, 'product_cat');
-            $term_id = is_wp_error($result) ? null : $result['term_id'];
-        } else {
-            $term_id = $term->term_id;
+        if (!$nombre_categoria_invid && !empty($categorias)) {
+            $nombre_categoria_invid = $categorias[0]['NAME'];
         }
+        if (!$nombre_categoria_invid && !empty($item['CATEGORY'])) {
+            $nombre_categoria_invid = $item['CATEGORY'];
+        }
+
+        $term_id = ivs_resolver_categoria_mapeada($nombre_categoria_invid, $opts);
         if ($term_id) {
             $product->set_category_ids(array($term_id));
         }
@@ -654,6 +1009,10 @@ function ivs_upsert_producto($item, $opts) {
         update_post_meta($product->get_id(), '_invid_dias_entrega', intval($opts['dias_entrega_default']));
     }
 
+    if ($forzar_categoria_id !== null) {
+        update_post_meta($product->get_id(), '_invid_categoria_fija', '1');
+    }
+
     return $accion;
 }
 
@@ -688,9 +1047,49 @@ function ivs_sideload_image($url) {
     return $attachment_id;
 }
 
+/**
+ * Consulta la cotización del dólar oficial en DolarAPI.
+ * [Confianza alta en el endpoint y el campo "venta" — verificado contra
+ * la documentación pública de DolarAPI antes de escribir esto]
+ */
+function ivs_obtener_cotizacion_dolar_oficial() {
+    $response = wp_remote_get('https://dolarapi.com/v1/dolares/oficial', array('timeout' => 15));
+
+    if (is_wp_error($response)) {
+        throw new Exception('Error de red consultando DolarAPI: ' . $response->get_error_message());
+    }
+
+    $code = wp_remote_retrieve_response_code($response);
+    if ($code !== 200) {
+        throw new Exception("DolarAPI devolvió HTTP $code");
+    }
+
+    $data = json_decode(wp_remote_retrieve_body($response), true);
+    if (!isset($data['venta'])) {
+        throw new Exception('Respuesta inesperada de DolarAPI: ' . wp_remote_retrieve_body($response));
+    }
+
+    return floatval($data['venta']);
+}
+
 function ivs_run_sync() {
     $opts = get_option(IVS_OPTION_KEY);
     ivs_log('=== Iniciando sincronización ===');
+
+    // Resolvemos la cotización a usar ANTES de procesar productos.
+    // En modo automático, si DolarAPI falla, caemos al valor fijo
+    // configurado como respaldo (nunca se corta el sync por esto).
+    if (($opts['modo_cotizacion'] ?? 'automatico') === 'automatico') {
+        try {
+            $cotizacion_obtenida = ivs_obtener_cotizacion_dolar_oficial();
+            $opts['usd_to_ars'] = $cotizacion_obtenida;
+            ivs_log("Cotización automática (DolarAPI, oficial): $cotizacion_obtenida");
+        } catch (Exception $e) {
+            ivs_log('AVISO: falló la cotización automática (' . $e->getMessage() . '). Usando valor fijo de respaldo: ' . $opts['usd_to_ars']);
+        }
+    } else {
+        ivs_log('Modo manual — usando tipo de cambio fijo: ' . $opts['usd_to_ars']);
+    }
 
     try {
         $token = ivs_get_invid_token();
